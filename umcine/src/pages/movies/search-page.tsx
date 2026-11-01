@@ -1,20 +1,48 @@
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
-import type { FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Footer } from "../../components/layout/footer";
 import { BookmarkButton } from "../../components/movies/bookmark-button";
-import { movies } from "../../data/movies";
+import { searchMovies } from "../../api/movies/search-movies";
+import type { TmdbMovieListItem } from "../../api/movies/models";
+import { getTmdbPosterUrl } from "../../utils/movies/tmdb-image";
 
 export function SearchPage() {
-  const { query } = useSearch({ from: "/search" });
+  const { query = "" } = useSearch({ from: "/search" });
   const navigate = useNavigate({ from: "/search" });
-  const normalizedQuery = query?.trim().toLowerCase() ?? "";
-  const searchResults = normalizedQuery
-    ? movies.filter(
-        (movie) =>
-          movie.title.toLowerCase().includes(normalizedQuery) ||
-          movie.originalTitle.toLowerCase().includes(normalizedQuery),
-      )
-    : [];
+  const normalizedQuery = query.trim();
+  const [searchResults, setSearchResults] = useState<TmdbMovieListItem[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    let ignore = false;
+    const normalizedQuery = query.trim();
+
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSearchResults([]);
+    setErrorMessage(null);
+
+    if (!normalizedQuery) {
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
+    searchMovies({ query: normalizedQuery })
+      .then((response) => {
+        if (!ignore) setSearchResults(response.results);
+      })
+      .catch(() => {
+        if (!ignore) setErrorMessage("검색 결과를 불러오지 못했어요.");
+      })
+      .finally(() => {
+        if (!ignore) setIsLoading(false);
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [query]);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -79,13 +107,21 @@ export function SearchPage() {
                 </p>
               </div>
 
-              {searchResults.length === 0 ? (
+              {isLoading ? (
+                <p className="my-20 text-center text-[#606774]" role="status">
+                  검색 결과를 불러오는 중이에요.
+                </p>
+              ) : errorMessage ? (
+                <p className="my-20 text-center text-[#606774]" role="alert">{errorMessage}</p>
+              ) : searchResults.length === 0 ? (
                 <p className="my-20 text-center text-[#606774]">
                   검색 결과가 없어요.
                 </p>
               ) : (
                 <ul className="mt-4 grid list-none grid-cols-1 gap-x-8 p-0 md:grid-cols-2">
-                  {searchResults.map((movie) => (
+                  {searchResults.map((movie) => {
+                    const posterUrl = getTmdbPosterUrl(movie.poster_path);
+                    return (
                     <li
                       className="relative grid min-h-[218px] grid-cols-[104px_minmax(0,1fr)] gap-4 border-b border-[#e3e6eb] py-4 sm:grid-cols-[126px_minmax(0,1fr)] sm:gap-5"
                       key={movie.id}
@@ -95,11 +131,17 @@ export function SearchPage() {
                         to="/movies/$movieId"
                         params={{ movieId: String(movie.id) }}
                       >
-                        <img
-                          className="block h-[156px] w-[104px] rounded-lg object-cover sm:h-[190px] sm:w-[126px]"
-                          src={movie.posterPath}
-                          alt={`${movie.title} 포스터`}
-                        />
+                        {posterUrl ? (
+                          <img
+                            className="block h-[156px] w-[104px] rounded-lg object-cover sm:h-[190px] sm:w-[126px]"
+                            src={posterUrl}
+                            alt={`${movie.title} 포스터`}
+                          />
+                        ) : (
+                          <div className="flex h-[156px] w-[104px] items-center justify-center rounded-lg bg-gray-200 text-sm text-gray-600 sm:h-[190px] sm:w-[126px]">
+                            이미지 없음
+                          </div>
+                        )}
                       </Link>
 
                       <div className="min-w-0 pt-1">
@@ -111,7 +153,7 @@ export function SearchPage() {
                           {movie.title}
                         </Link>
                         <p className="mt-1 mb-0 truncate text-xs leading-5 text-[#969da8]">
-                          {movie.originalTitle} · {movie.releaseDate}
+                          {movie.original_title} · {movie.release_date.replaceAll("-", ".")}
                         </p>
                         <p className="mt-3 mb-0 line-clamp-2 text-sm leading-6 text-[#606774]">
                           {movie.overview}
@@ -127,7 +169,8 @@ export function SearchPage() {
 
                       <BookmarkButton movieId={movie.id} />
                     </li>
-                  ))}
+                    );
+                  })}
                 </ul>
               )}
             </section>
