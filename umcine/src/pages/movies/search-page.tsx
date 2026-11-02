@@ -1,48 +1,21 @@
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
-import { useEffect, useState, type FormEvent } from "react";
+import type { FormEvent } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Footer } from "../../components/layout/footer";
 import { BookmarkButton } from "../../components/movies/bookmark-button";
 import { searchMovies } from "../../api/movies/search-movies";
-import type { TmdbMovieListItem } from "../../api/movies/models";
 import { getTmdbPosterUrl } from "../../utils/movies/tmdb-image";
 
 export function SearchPage() {
   const { query = "" } = useSearch({ from: "/search" });
   const navigate = useNavigate({ from: "/search" });
-  const normalizedQuery = query.trim();
-  const [searchResults, setSearchResults] = useState<TmdbMovieListItem[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  useEffect(() => {
-    let ignore = false;
-    const normalizedQuery = query.trim();
-
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setSearchResults([]);
-    setErrorMessage(null);
-
-    if (!normalizedQuery) {
-      setIsLoading(false);
-      return;
-    }
-
-    setIsLoading(true);
-    searchMovies({ query: normalizedQuery })
-      .then((response) => {
-        if (!ignore) setSearchResults(response.results);
-      })
-      .catch(() => {
-        if (!ignore) setErrorMessage("검색 결과를 불러오지 못했어요.");
-      })
-      .finally(() => {
-        if (!ignore) setIsLoading(false);
-      });
-
-    return () => {
-      ignore = true;
-    };
-  }, [query]);
+  const normalizedQuery = query?.trim() ?? "";
+  const searchQuery = useQuery({
+    queryKey: ["movies", "search", { query: normalizedQuery }],
+    queryFn: () => searchMovies({ query: normalizedQuery }),
+    enabled: normalizedQuery.length > 0,
+  });
+  const searchResults = searchQuery.data?.results ?? [];
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -107,13 +80,13 @@ export function SearchPage() {
                 </p>
               </div>
 
-              {isLoading ? (
+              {searchQuery.isLoading ? (
                 <p className="my-20 text-center text-[#606774]" role="status">
                   검색 결과를 불러오는 중이에요.
                 </p>
-              ) : errorMessage ? (
-                <p className="my-20 text-center text-[#606774]" role="alert">{errorMessage}</p>
-              ) : searchResults.length === 0 ? (
+              ) : searchQuery.isError ? (
+                <p className="my-20 text-center text-[#606774]" role="alert">{searchQuery.error.message}</p>
+              ) : searchQuery.isSuccess && searchResults.length === 0 ? (
                 <p className="my-20 text-center text-[#606774]">
                   검색 결과가 없어요.
                 </p>

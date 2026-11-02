@@ -11,10 +11,9 @@ export function Pagination({
   totalPages,
   onPageChange,
 }: PaginationProps) {
-  const pages = Array.from(
-    { length: totalPages },
-    (_, index) => index + 1,
-  );
+  const pageCount = Math.min(5, totalPages);
+  const startPage = Math.max(1, Math.min(currentPage - 2, totalPages - pageCount + 1));
+  const pages = Array.from({ length: pageCount }, (_, index) => startPage + index);
 
   const handlePrevious = () => {
     if (currentPage > 1) {
